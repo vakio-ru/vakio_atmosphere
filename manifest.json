@@ -5,6 +5,7 @@
     "@Anti-Sh"
   ],
   "config_flow": true,
+  "version": "0.1.0",
   "dependencies": [],
   "documentation": "https://github.com/Anti-Sh/vakio_atmosphere/blob/dev/README.md",
   "homekit": {},
