@@ -1,0 +1,15 @@
+{
+  "domain": "vakio_atmosphere",
+  "name": "Vakio Atmosphere",
+  "codeowners": [
+    "@Anti-Sh"
+  ],
+  "config_flow": true,
+  "dependencies": [],
+  "documentation": "https://www.home-assistant.io/integrations/vakio_atmosphere",
+  "homekit": {},
+  "iot_class": "cloud_polling",
+  "requirements": [],
+  "ssdp": [],
+  "zeroconf": []
+}
