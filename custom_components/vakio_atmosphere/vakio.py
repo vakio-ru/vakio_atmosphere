@@ -1,22 +1,25 @@
-"""Service classes for interacting with Vakio devices"""
+"""Service classes for interacting with Vakio devices."""
 from __future__ import annotations
+
 import asyncio
+import contextlib
 from datetime import timedelta
 import logging
 import random
 from typing import Any
+
 import paho.mqtt.client as mqtt
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
 from .const import (
-    DOMAIN,
     CONF_HOST,
     CONF_PASSWORD,
     CONF_PORT,
     CONF_TOPIC,
     CONF_USERNAME,
+    DOMAIN,
 )
 
 _LOGGER: logging.Logger = logging.getLogger(__package__)
@@ -37,7 +40,7 @@ class MqttClient:
     def __init__(
         self,
         hass: HomeAssistant,
-        data: dict(str, Any),
+        data: dict(str, Any),  # type: ignore
         coordinator: Coordinator | None = None,
     ) -> None:
         """Initialize."""
@@ -61,20 +64,18 @@ class MqttClient:
         self.is_connected = False
 
     def on_message(self, client, userdata, message: mqtt.MQTTMessage):
-        """Callback on message"""
+        """Обработка при сообщении."""
         key = str.split(message.topic, "/")[-1]
         self._client.unsubscribe(topic=message.topic)
         value = message.payload.decode()
         if value is not None:
-            try:
+            with contextlib.suppress(ValueError):
                 value = int(value)
-            except ValueError:
-                pass
 
-        self._coordinator.condition[key] = value
+        self._coordinator.condition[key] = value  # type: ignore
 
     def on_connect(self, client, userdata, flags, rc):  # pylint: disable=invalid-name
-        """Callback on connect"""
+        """Обработка при подключении."""
         self.is_connected = True
 
     async def connect(self) -> bool:
@@ -91,7 +92,7 @@ class MqttClient:
         return False
 
     async def disconnect(self) -> None:
-        """Disconnect from the broker"""
+        """Disconnect from the broker."""
 
         def stop() -> None:
             """Stop the MQTT client."""
@@ -113,7 +114,7 @@ class MqttClient:
             return False
 
     async def subscribe(self) -> None:
-        """Подписка на топики"""
+        """Подписка на топики."""
         self.subscribes_count += 1
         async with self._paho_lock:
             _, mid = await self.hass.async_add_executor_job(
@@ -125,13 +126,13 @@ class MqttClient:
 
     async def get_condition(
         self,
-    ) -> dict(str, Any):
-        """Get condition of device"""
+    ) -> dict(str, Any):  # type: ignore
+        """Get condition of device."""
         await self.subscribe()
-        return self._coordinator.condition
+        return self._coordinator.condition  # type: ignore
 
-    async def publish(self, endpoint: str, msg: str, prefix: str = None) -> bool:
-        """Publish commands to topic"""
+    async def publish(self, endpoint: str, msg: str, prefix: str | None = None) -> bool:
+        """Publish commands to topic."""
         topic = self.data[CONF_TOPIC] + "/" + endpoint
         if prefix is not None:
             topic = prefix + "/" + topic
@@ -147,9 +148,10 @@ class MqttClient:
 
 
 class Coordinator(DataUpdateCoordinator):
-    """Class for interact with Broker and HA"""
+    """Class for interact with Broker and HA."""
 
-    def __init__(self, hass: HomeAssistant, data: dict(str, Any)) -> None:
+    def __init__(self, hass: HomeAssistant, data: dict(str, Any)) -> None:  # type: ignore
+        """Инициализация класса Coordinatir."""
         super().__init__(hass, _LOGGER, name=DOMAIN, update_interval=timedelta(5))
         self._data = data
         self.mqttc = MqttClient(self.hass, data, self)
@@ -162,7 +164,7 @@ class Coordinator(DataUpdateCoordinator):
         self.is_logged_in = False
 
     async def async_login(self) -> bool:
-        """Авторизация в брокере"""
+        """Авторизация в брокере."""
         if self.is_logged_in is True:
             return True
 
@@ -174,25 +176,26 @@ class Coordinator(DataUpdateCoordinator):
         return status
 
     async def _async_update_data(self) -> bool:
-        """Get all data"""
+        """Get all data."""
         await self.mqttc.get_condition()
         return True
 
     async def _async_update(self, now) -> None:
-        """
+        """Async Update.
+
         Функция регистритуется в hass, во всех датчиках и устройствах и контролирует
         обновление данных через mqtt.
         """
         await self.mqttc.get_condition()
 
     def get_temp(self) -> int | bool | None:
-        """Возвращается текущая температура с внутреннего датчика устройства"""
+        """Возвращается текущая температура с внутреннего датчика устройства."""
         return self.condition[TEMP_ENDPOINT]
 
     def get_hud(self) -> int | bool | None:
-        """Возвращается текущая влажность с внутреннего датчика устройства"""
+        """Возвращается текущая влажность с внутреннего датчика устройства."""
         return self.condition[HUD_ENDPOINT]
 
     def get_co2(self) -> int | bool | None:
-        """Возвращается текущая влажность с внутреннего датчика устройства"""
+        """Возвращается текущая влажность с внутреннего датчика устройства."""
         return self.condition[CO2_ENDPOINT]

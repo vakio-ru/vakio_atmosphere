@@ -1,8 +1,8 @@
 """Sensor platform that has a temperature, humidity and co2 sensors."""
 from __future__ import annotations
+
 from datetime import datetime, timedelta
 
-from .vakio import Coordinator
 from homeassistant.components.sensor import (
     SensorDeviceClass,
     SensorEntity,
@@ -11,9 +11,9 @@ from homeassistant.components.sensor import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
     ATTR_BATTERY_LEVEL,
+    CONCENTRATION_PARTS_PER_MILLION,
     PERCENTAGE,
     UnitOfTemperature,
-    CONCENTRATION_PARTS_PER_MILLION,
 )
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import DeviceInfo
@@ -22,6 +22,7 @@ from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType, StateType
 
 from . import DOMAIN
+from .vakio import Coordinator
 
 
 async def async_setup_platform(
@@ -30,11 +31,12 @@ async def async_setup_platform(
     async_add_entities: AddEntitiesCallback,
     discovery_info: DiscoveryInfoType | None = None,
 ) -> None:
-    """Set up the Demo sensors."""
+    """Set up the Vakio sensors."""
+    topic = conf.data["topic"]  # type: ignore
     temp = VakioSensor(
         hass,
-        conf.entry_id,
-        "temp",
+        conf.entry_id,  # type: ignore
+        f"{topic}_temp",
         "Atmosphere Temp Sensor",
         None,
         SensorDeviceClass.TEMPERATURE,
@@ -43,8 +45,8 @@ async def async_setup_platform(
     )
     hud = VakioSensor(
         hass,
-        conf.entry_id,
-        "hud",
+        conf.entry_id,  # type: ignore
+        f"{topic}_hud",
         "Atmosphere Humidity Sensor",
         None,
         SensorDeviceClass.HUMIDITY,
@@ -53,8 +55,8 @@ async def async_setup_platform(
     )
     co2 = VakioSensor(
         hass,
-        conf.entry_id,
-        "co2",
+        conf.entry_id,  # type: ignore
+        f"{topic}_co2",
         "Atmosphere CO2 Sensor",
         None,
         SensorDeviceClass.CO2,
@@ -63,7 +65,7 @@ async def async_setup_platform(
     )
     entities_list: list[VakioSensor] = [temp, hud, co2]
     async_add_entities(entities_list)
-    coordinator: Coordinator = hass.data[DOMAIN][conf.entry_id]
+    coordinator: Coordinator = hass.data[DOMAIN][conf.entry_id]  # type: ignore
     await coordinator.async_login()
     async_track_time_interval(
         hass,
@@ -86,11 +88,11 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up config entry."""
-    await async_setup_platform(hass, config_entry, async_add_entities)
+    await async_setup_platform(hass, config_entry, async_add_entities)  # type: ignore
 
 
 class VakioSensor(SensorEntity):
-    """Реализация сенсора устройства Vakio"""
+    """Реализация сенсора устройства Vakio."""
 
     _attr_should_poll = False
 
@@ -133,9 +135,9 @@ class VakioSensor(SensorEntity):
             self._attr_extra_state_attributes = {ATTR_BATTERY_LEVEL: battery}
 
     async def _async_update(self, now: datetime) -> None:
-        if SensorDeviceClass.TEMPERATURE == self._attr_device_class:
+        if self._attr_device_class == SensorDeviceClass.TEMPERATURE:
             val = self.coordinator.get_temp()
-        elif SensorDeviceClass.HUMIDITY == self._attr_device_class:
+        elif self._attr_device_class == SensorDeviceClass.HUMIDITY:
             val = self.coordinator.get_hud()
         else:
             val = self.coordinator.get_co2()
