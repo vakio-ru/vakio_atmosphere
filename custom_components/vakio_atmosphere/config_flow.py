@@ -1,101 +1,44 @@
-"""Config flow for Vakio Atmosphere integration."""
-from __future__ import annotations
-
-import logging
-from typing import Any
+"""Configure."""
 
 import voluptuous as vol
 
 from homeassistant import config_entries
-from homeassistant.core import HomeAssistant
-from homeassistant.data_entry_flow import FlowResult
-from homeassistant.exceptions import HomeAssistantError
-from homeassistant.helpers.selector import (
-    NumberSelector,
-    NumberSelectorConfig,
-    NumberSelectorMode,
-    TextSelector,
-    TextSelectorConfig,
-    TextSelectorType,
-)
+from homeassistant.components.mqtt import valid_subscribe_topic
 
-from .const import (
-    CONF_HOST,
-    CONF_PASSWORD,
-    CONF_PORT,
-    CONF_TOPIC,
-    CONF_USERNAME,
-    DEFAULT_PORT,
-    DEFAULT_TOPIC,
-    DOMAIN,
-)
-from .vakio import MqttClient
-
-_LOGGER = logging.getLogger(__name__)
-
-TEXT_SELECTOR = TextSelector(TextSelectorConfig(type=TextSelectorType.TEXT))
-PORT_SELECTOR = vol.All(
-    NumberSelector(NumberSelectorConfig(mode=NumberSelectorMode.BOX, min=1, max=65535)),
-    vol.Coerce(int),
-)
-PASSWORD_SELECTOR = TextSelector(TextSelectorConfig(type=TextSelectorType.PASSWORD))
+from .const import CONF_PREFIX, DEFAULT_PREFIX, DOMAIN
 
 
-STEP_USER_DATA_SCHEMA = vol.Schema(
-    {
-        vol.Required(CONF_HOST): TEXT_SELECTOR,
-        vol.Required(CONF_PORT, default=DEFAULT_PORT): PORT_SELECTOR,  # type: ignore
-        vol.Optional(CONF_USERNAME): TEXT_SELECTOR,
-        vol.Optional(CONF_PASSWORD): PASSWORD_SELECTOR,
-        vol.Required(CONF_TOPIC, default=DEFAULT_TOPIC): TEXT_SELECTOR,  # type: ignore
-    }
-)
-
-
-async def validate_input(
-    hass: HomeAssistant, data: dict[str, Any]
-) -> dict[str, Any] | None:
-    """Validate the user input allows us to connect.
-
-    Data has the keys from STEP_USER_DATA_SCHEMA with values provided by the user.
-    """
-    broker = MqttClient(hass, data)
-
-    if not await broker.try_connect():
-        raise InvalidAuth
-
-
-class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    """Handle a config flow for Vakio Smart Control."""
+class AtmosphereConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
+    """Handle a config flow for Atmosphere."""
 
     VERSION = 1
 
-    async def async_step_user(
-        self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
+    async def async_step_user(self, user_input=None):
         """Handle the initial step."""
-        errors: dict[str, str] = {}
+        errors = {}
+
         if user_input is not None:
-            try:
-                await validate_input(self.hass, user_input)
-            except CannotConnect:
-                errors["base"] = "cannot_connect"
-            except InvalidAuth:
-                errors["base"] = "invalid_auth"
-            except Exception:  # pylint: disable=broad-except
-                _LOGGER.exception("Unexpected exception")
-                errors["base"] = "unknown"
+            prefix = user_input.get(CONF_PREFIX, DEFAULT_PREFIX)
+            if not valid_subscribe_topic(prefix):
+                errors["base"] = "invalid_prefix"
             else:
-                return self.async_create_entry(title="", data=user_input)
+                existing_entries = self._async_current_entries()
+                for entry in existing_entries:
+                    if entry.data.get(CONF_PREFIX) == prefix:
+                        return self.async_abort(reason="already_configured")
+
+                return self.async_create_entry(title="Atmosphere", data=user_input)
 
         return self.async_show_form(
-            step_id="user", data_schema=STEP_USER_DATA_SCHEMA, errors=errors
+            step_id="user",
+            data_schema=vol.Schema(
+                {
+                    vol.Optional(CONF_PREFIX, default=DEFAULT_PREFIX): str,
+                }
+            ),
+            errors=errors,
         )
 
-
-class CannotConnect(HomeAssistantError):
-    """Error to indicate we cannot connect."""
-
-
-class InvalidAuth(HomeAssistantError):
-    """Error to indicate there is invalid auth."""
+    async def async_step_import(self, import_data):
+        """Import a config entry from configuration.yaml."""
+        return await self.async_step_user(import_data)
